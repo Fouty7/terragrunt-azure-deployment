@@ -150,7 +150,6 @@ locals {
 ./scripts/mac-linux/deploy.sh -a apply -e test -f
 ./scripts/mac-linux/deploy.sh -a plan -e test
 ```
-```
 
 ---
 
