@@ -1,0 +1,105 @@
+# ========================================
+# TERRAFORM & TERRAGRUNT FILES
+# ========================================
+
+# Terraform state files - NEVER commit these!
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+myfile
+
+# Terraform plan files
+*.tfplan
+*.tfplan.*
+
+# Terraform variable files containing sensitive data
+*.tfvars
+*.tfvars.json
+!terraform.tfvars.example
+!*example*.tfvars
+
+# Terraform crash log files
+crash.log
+crash.*.log
+
+# Terraform workspace files
+.terraform/
+
+# Terraform provider lock files (optional - team decision)
+# Uncomment to ignore lock files (not recommended for team projects)
+# .terraform.lock.hcl
+
+# Terragrunt cache directories
+.terragrunt-cache/
+
+# Terragrunt working directories
+.terragrunt-working-dir/
+
+# Terragrunt debug files
+terragrunt-debug.tfvars.json
+
+# ========================================
+# AZURE & CLOUD CREDENTIALS
+# ========================================
+
+# Azure credentials and secrets
+.azure/
+*.publishsettings
+*.azureenvrc
+
+# Environment files with credentials
+.env
+.env.local
+.env.*.local
+
+# ========================================
+# POWERSHELL & SCRIPTS
+# ========================================
+
+# PowerShell execution history
+ConsoleHost_history.txt
+
+# PowerShell modules cache
+.PowerShellPackages/
+
+# Specific script to ignore (as requested)
+folder-setup.ps1
+
+# ========================================
+# CERTIFICATES & KEYS
+# ========================================
+
+# SSL certificates and private keys
+*.pem
+*.key
+*.crt
+*.cer
+*.pfx
+*.p12
+
+# SSH keys
+id_rsa
+id_rsa.pub
+id_dsa
+id_dsa.pub
+id_ecdsa
+id_ecdsa.pub
+id_ed25519
+id_ed25519.pub
+
+# ========================================
+# LOGS & TEMPORARY FILES
+# ========================================
+
+# Log files
+*.log
+logs/
+*.tmp
+*.temp
+
+# Backup files
+*.bak
+*.backup
+*~
+*.swp
+*.swo
