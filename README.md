@@ -349,29 +349,6 @@ terragrunt plan --terragrunt-working-dir live/test/new-module
 
 ---
 
-## 📊 Monitoring & Observability
-
-### Log Analytics Workspace
-- Centralized logging for all Azure resources
-- 30-day retention (configurable)
-- Query capabilities with KQL
-
-### Application Insights  
-- Application performance monitoring
-- 90-day retention
-- Integration with AKS for container insights
-
-### Access Monitoring Data
-```bash
-# View workspace
-az monitor log-analytics workspace show --resource-group test-rg --workspace-name cai-aks-test-logs
-
-# View Application Insights
-az monitor app-insights component show --resource-group test-rg --app cai-aks-test-insights
-```
-
----
-
 ## 🆘 Getting Help
 
 ### Error Analysis
@@ -399,20 +376,5 @@ az deployment group validate --resource-group test-rg --template-file template.j
 # Check service health
 az resource health list --resource-group test-rg
 ```
-
----
-
-## 🔄 Version History
-
-- **v1.0** - Initial setup with basic modules
-- **v1.1** - Added dependency management and retry logic  
-- **v1.2** - Regional optimization and error handling
-- **v1.3** - Enhanced security and documentation
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
 
 **Happy Infrastructure as Code! 🚀**
