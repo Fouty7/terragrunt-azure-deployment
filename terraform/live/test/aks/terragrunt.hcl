@@ -37,7 +37,7 @@ inputs = {
   cluster_name        = "cai-aks-${local.env}"
   resource_group_name = local.resource_group_name
   location            = local.location
-  kubernetes_version  = "1.28"
+  kubernetes_version  = "1.33.3"
 
   # inherit from parent environment locals
   node_count          = local.node_count

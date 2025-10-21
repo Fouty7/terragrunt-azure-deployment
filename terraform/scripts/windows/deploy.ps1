@@ -1,4 +1,4 @@
-# Smart Terragrunt Deployment Script
+# Terragrunt Deployment Script
 # Handles dependencies correctly for first-time and subsequent deployments
 param(
     [Parameter(Mandatory=$true)]
@@ -14,7 +14,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "Starting smart Terragrunt $Action for $Environment environment..." -ForegroundColor Green
+Write-Host "Starting Terragrunt $Action for $Environment environment..." -ForegroundColor Green
 
 # Navigate to environment directory
 $envPath = "live\$Environment"

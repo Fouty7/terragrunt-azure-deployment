@@ -3,24 +3,35 @@
 ## 🎯 Daily Commands
 
 ### Deploy Infrastructure
-```powershell
-# Plan changes
-.\scripts\deploy-smart.ps1 -Action plan -Environment test
 
-# Apply changes
-.\scripts\deploy-smart.ps1 -Action apply -Environment test
+Always run commands from terraform folder ```cd terraform```
 
-# First time setup
-.\scripts\deploy-smart.ps1 -Action apply -Environment test -FirstDeploy
+```bash
+cd terraform
+
+# Cross-platform commands (works on Windows, Mac, Linux)
+./scripts/deploy -a plan -e test               # Plan changes
+./scripts/deploy -a apply -e test              # Apply changes
+./scripts/deploy -a apply -e test -f           # First time setup
 ```
 
 ### Destroy Infrastructure
-```powershell
-# Safe destroy (with confirmation)
-.\scripts\destroy.ps1 -Environment test
+```bash
+# Cross-platform commands
+./scripts/destroy -e test                      # Safe destroy (with confirmation)
+./scripts/destroy -e test --auto-approve       # Automated destroy
+```
 
-# Automated destroy
-.\scripts\destroy.ps1 -Environment test -AutoApprove
+### Platform-Specific (if needed)
+```powershell
+# Windows PowerShell
+.\scripts\windows\deploy.ps1 -Action plan -Environment test
+.\scripts\windows\destroy.ps1 -Environment test
+```
+```bash
+# mac-linux/Linux/macOS Bash
+./scripts/mac-linux/deploy.sh -a plan -e test
+./scripts/mac-linux/destroy.sh -e test
 ```
 
 ## 🔧 Troubleshooting Commands
@@ -51,7 +62,11 @@ az aks list --resource-group test-rg
 terraform/
 ├── live/test/          # Test environment configs
 ├── modules/            # Reusable modules
-└── scripts/            # Deployment scripts
+└── scripts/            # Cross-platform deployment scripts
+    ├── deploy          # Cross-platform deploy wrapper
+    ├── destroy         # Cross-platform destroy wrapper
+    ├── windows/        # PowerShell scripts (Windows)
+    └── mac-linux/           # Bash scripts (Mac/Linux)
 ```
 
 ## 📦 Components Created
@@ -63,9 +78,10 @@ terraform/
 ## ⚠️ Common Gotchas
 
 1. **Always run from `terraform/` directory**
-2. **Use `westus2` region (not eastus)**
-3. **First deployments need `-FirstDeploy` flag**
+2. **Use `westus2` region (not eastus)**  
+3. **First deployments need `-f` flag (mac-linux) or `-FirstDeploy` flag (Windows)**
 4. **State locks need manual cleanup if interrupted**
+5. **Cross-platform scripts work on all OS - use them for consistency**
 
 ## 🆘 Emergency Contacts
 - DevOps Team: [contact info]

@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# Cross-platform destroy wrapper
+# Automatically detects OS and runs appropriate script
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Detect operating system
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || -n "$WINDIR" ]]; then
+    # Windows - run PowerShell script
+    powershell.exe -ExecutionPolicy Bypass -File "$SCRIPT_DIR/windows/destroy.ps1" "$@"
+else
+    # mac-linux/Linux/macOS - run bash script
+    "$SCRIPT_DIR/mac-linux/destroy.sh" "$@"
+fi

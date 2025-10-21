@@ -103,8 +103,8 @@ az role assignment create --assignee "SERVICE_PRINCIPAL_CLIENT_ID" --role "User 
 ### 5. Set Azure Credentials
 
 ```powershell
-# Run the credential setup script
-.\set-azure-creds.ps1
+# Windows - Run the credential setup script
+.\scripts\windows\set-azure-creds.ps1
 ```
 
 Or set environment variables manually:
@@ -129,15 +129,27 @@ locals {
 
 ### 7. Deploy Infrastructure
 
-**First deployment (handles dependencies):**
-```powershell
-.\scripts\deploy-smart.ps1 -Action apply -Environment test -FirstDeploy
+**Cross-Platform (Recommended):**
+```bash
+# First deployment (handles dependencies)
+./scripts/deploy -a apply -e test -f
+
+# Subsequent deployments  
+./scripts/deploy -a plan -e test
+./scripts/deploy -a apply -e test
 ```
 
-**Subsequent deployments:**
+**Windows (PowerShell):**
 ```powershell
-.\scripts\deploy-smart.ps1 -Action plan -Environment test
-.\scripts\deploy-smart.ps1 -Action apply -Environment test
+.\scripts\windows\deploy.ps1 -Action apply -Environment test -FirstDeploy
+.\scripts\windows\deploy.ps1 -Action plan -Environment test
+```
+
+**mac-linux/Linux/macOS (Bash):**
+```bash
+./scripts/mac-linux/deploy.sh -a apply -e test -f
+./scripts/mac-linux/deploy.sh -a plan -e test
+```
 ```
 
 ---
@@ -162,10 +174,16 @@ terraform/
 │   │   └── sql/              # SQL configuration
 │   ├── dev/             # Development environment  
 │   └── prod/            # Production environment
-└── scripts/             # Automation scripts
-    ├── deploy-smart.ps1      # Smart deployment script
-    ├── destroy.ps1           # Destruction script
-    └── set-azure-creds.ps1   # Credential setup
+└── scripts/             # Cross-platform automation scripts
+    ├── deploy               # Cross-platform deployment wrapper
+    ├── destroy              # Cross-platform destroy wrapper  
+    ├── windows/             # Windows-specific scripts
+    │   ├── deploy.ps1       # PowerShell deployment script
+    │   ├── destroy.ps1      # PowerShell destroy script
+    │   └── set-azure-creds.ps1  # Credential setup
+    └── mac-linux/                # mac-linux/Linux/macOS scripts
+        ├── deploy.sh        # Bash deployment script
+        └── destroy.sh       # Bash destroy script
 ```
 
 ## 📦 Infrastructure Components
@@ -181,25 +199,37 @@ terraform/
 
 ### Deployment Scripts
 
-**Smart Deployment (Recommended)**
-```powershell
+**Cross-Platform Scripts (Recommended)**
+```bash
 # First time deployment (handles dependencies)
-.\scripts\deploy-smart.ps1 -Action apply -Environment test -FirstDeploy
+./scripts/deploy -a apply -e test -f
 
 # Plan changes
-.\scripts\deploy-smart.ps1 -Action plan -Environment test
+./scripts/deploy -a plan -e test
 
 # Apply changes  
-.\scripts\deploy-smart.ps1 -Action apply -Environment test
+./scripts/deploy -a apply -e test
 ```
 
 **Destruction Scripts**
-```powershell
+
+*Cross-Platform:*
+```bash
 # Safe destruction (with confirmation)
-.\scripts\destroy.ps1 -Environment test
+./scripts/destroy -e test
 
 # Automated destruction (for CI/CD)
-.\scripts\destroy.ps1 -Environment test -AutoApprove
+./scripts/destroy -e test --auto-approve
+```
+
+*Platform-Specific:*
+```powershell
+# Windows
+.\scripts\windows\destroy.ps1 -Environment test
+```
+```bash
+# mac-linux/Linux/macOS  
+./scripts/mac-linux/destroy.sh -e test
 ```
 
 ### Manual Commands (Advanced)
@@ -289,7 +319,7 @@ az role assignment create --assignee "SERVICE_PRINCIPAL_CLIENT_ID" --role "User 
 
 #### **AKS Gets "mock-workspace-id" Error**
 **Cause:** Monitoring module not applied first
-**Solution:** Use `deploy-smart.ps1 -FirstDeploy` or apply monitoring manually first
+**Solution:** Use `deploy.ps1 -FirstDeploy` or apply monitoring manually first
 
 #### **Module Dependencies**
 ```
@@ -334,14 +364,14 @@ locals {
 
 3. **Deploy:**
 ```powershell
-.\scripts\deploy-smart.ps1 -Action apply -Environment dev -FirstDeploy
+.\scripts\deploy.ps1 -Action apply -Environment dev -FirstDeploy
 ```
 
 ### Adding New Modules
 
 1. **Create module in `modules/` directory**
 2. **Add to environment in `live/ENV/` directory**  
-3. **Update dependencies in `deploy-smart.ps1` if needed**
+3. **Update dependencies in `deploy.ps1` if needed**
 4. **Test with plan first:**
 ```powershell
 terragrunt plan --terragrunt-working-dir live/test/new-module
