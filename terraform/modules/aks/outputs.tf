@@ -4,6 +4,12 @@ output "kube_config" {
   sensitive   = true
 }
 
+output "kube_config_raw" {
+  value       = azurerm_kubernetes_cluster.aks.kube_config_raw
+  description = "Raw kubeconfig for the AKS cluster"
+  sensitive   = true
+}
+
 output "cluster_name" {
   value       = azurerm_kubernetes_cluster.aks.name
   description = "Name of the AKS cluster"

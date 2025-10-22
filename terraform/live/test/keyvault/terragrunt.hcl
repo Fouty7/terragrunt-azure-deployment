@@ -1,7 +1,24 @@
-
-
 terraform {
   source = "../../../modules/keyvault"
+}
+
+# Dependencies
+dependencies {
+  paths = ["../sql", "../monitoring"]
+}
+
+dependency "sql" {
+  config_path = "../sql"
+  mock_outputs = {
+    sql_connection_string = "mock-connection-string"
+  }
+}
+
+dependency "monitoring" {
+  config_path = "../monitoring"
+  mock_outputs = {
+    application_insights_instrumentation_key = "mock-insights-key"
+  }
 }
 
 include "root" {
@@ -26,8 +43,8 @@ inputs = {
   enable_rbac_authorization  = true
 
   default_secrets = {
-    "sql-connection-string" = "Server=test-sql.database.windows.net;Database=testdb;User Id=testadmin;Password=${get_env("SQL_ADMIN_PASSWORD", "Default123!")};Encrypt=true;TrustServerCertificate=true;"
-    "application-insights-key" = "00000000-0000-0000-0000-000000000000"
+    "sql-connection-string" = dependency.sql.outputs.sql_connection_string
+    "application-insights-key" = dependency.monitoring.outputs.application_insights_instrumentation_key
     "test-api-key" = "test-api-key-123"
     "redis-connection" = "localhost:6379"
   }

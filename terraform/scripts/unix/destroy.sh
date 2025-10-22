@@ -145,25 +145,30 @@ destroy_module() {
 }
 
 # Main execution
-echo -e "${YELLOW}DESTRUCTION ORDER: AKS -> KeyVault -> SQL -> Monitoring -> Root${NC}"
+echo -e "${YELLOW}DESTRUCTION ORDER: AKS -> KeyVault -> SQL/Monitoring/Network -> Root${NC}"
 
 # Destroy in reverse dependency order
-# 1. AKS (depends on monitoring)
+# 1. AKS (depends on monitoring and network)
 if [[ -d "aks" ]]; then
     destroy_module "AKS" "aks"
 fi
 
-# 2. Independent modules
+# 2. KeyVault (depends on SQL and monitoring)
 if [[ -d "keyvault" ]]; then
     destroy_module "KeyVault" "keyvault"
 fi
 
+# 3. Independent modules (can be destroyed in parallel conceptually)
 if [[ -d "sql" ]]; then
     destroy_module "SQL Database" "sql"
 fi
 
 if [[ -d "monitoring" ]]; then
     destroy_module "Monitoring" "monitoring"
+fi
+
+if [[ -d "network" ]]; then
+    destroy_module "Network" "network"
 fi
 
 # 3. Root module

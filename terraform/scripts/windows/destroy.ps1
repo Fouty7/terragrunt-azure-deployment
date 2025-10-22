@@ -82,24 +82,29 @@ function Destroy-Module {
 
 try {
     # Destroy in reverse dependency order
-    Write-Host "DESTRUCTION ORDER: AKS -> KeyVault -> SQL -> Monitoring -> Root" -ForegroundColor Yellow
+    Write-Host "DESTRUCTION ORDER: AKS -> KeyVault -> SQL/Monitoring/Network -> Root" -ForegroundColor Yellow
     
-    # 1. AKS (depends on monitoring)
+    # 1. AKS (depends on monitoring and network)
     if (Test-Path "aks") {
         Destroy-Module "AKS" "aks"
     }
     
-    # 2. Independent modules
+    # 2. KeyVault (depends on SQL and monitoring)
     if (Test-Path "keyvault") {
         Destroy-Module "KeyVault" "keyvault"
     }
     
+    # 3. Independent modules (can be destroyed in parallel conceptually)
     if (Test-Path "sql") {
         Destroy-Module "SQL Database" "sql"
     }
     
     if (Test-Path "monitoring") {
         Destroy-Module "Monitoring" "monitoring"
+    }
+    
+    if (Test-Path "network") {
+        Destroy-Module "Network" "network"
     }
     
     # 3. Root module

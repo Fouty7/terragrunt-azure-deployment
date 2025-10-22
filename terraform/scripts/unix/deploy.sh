@@ -148,7 +148,7 @@ if [[ "$FIRST_DEPLOY" == true && "$ACTION" == "apply" ]]; then
     echo -e "${CYAN}FIRST DEPLOYMENT: Running modules in dependency order...${NC}"
     
     # Step 1: Independent modules first
-    independent_modules=("monitoring" "keyvault" "sql")
+    independent_modules=("monitoring" "network" "sql")
     for module in "${independent_modules[@]}"; do
         echo -e "${YELLOW}Applying $module...${NC}"
         if ! retry_with_backoff "$module Apply" "terragrunt apply --auto-approve --terragrunt-working-dir $module"; then
@@ -157,8 +157,15 @@ if [[ "$FIRST_DEPLOY" == true && "$ACTION" == "apply" ]]; then
         fi
     done
     
-    # Step 2: Dependent modules
-    echo -e "${YELLOW}Applying AKS (depends on monitoring)...${NC}"
+    # Step 2: KeyVault (depends on SQL and monitoring)
+    echo -e "${YELLOW}Applying KeyVault (depends on SQL and monitoring)...${NC}"
+    if ! retry_with_backoff "KeyVault Apply" "terragrunt apply --auto-approve --terragrunt-working-dir keyvault"; then
+        echo -e "${RED}Failed to apply KeyVault${NC}"
+        exit 1
+    fi
+    
+    # Step 3: AKS (depends on monitoring and network)
+    echo -e "${YELLOW}Applying AKS (depends on monitoring and network)...${NC}"
     if ! retry_with_backoff "AKS Apply" "terragrunt apply --auto-approve --terragrunt-working-dir aks"; then
         echo -e "${RED}Failed to apply AKS${NC}"
         exit 1

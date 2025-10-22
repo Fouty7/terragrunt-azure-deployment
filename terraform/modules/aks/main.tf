@@ -7,7 +7,10 @@ resource "azurerm_kubernetes_cluster" "aks" {
   kubernetes_version = var.kubernetes_version
   
   network_profile {
-    network_plugin = var.network_plugin
+    network_plugin   = var.network_plugin
+    service_cidr     = var.service_cidr
+    dns_service_ip   = var.dns_service_ip
+    load_balancer_sku = "standard"
   }
 
   default_node_pool {
@@ -17,6 +20,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
     auto_scaling_enabled = var.enable_auto_scaling
     min_count            = var.enable_auto_scaling ? var.min_count : null
     max_count            = var.enable_auto_scaling ? var.max_count : null
+    vnet_subnet_id       = var.subnet_id
   }
 
   role_based_access_control_enabled = var.enable_rbac
@@ -34,4 +38,12 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 
   tags = var.tags
+}
+
+# Generate kubeconfig file for pipeline integration
+resource "local_file" "kubeconfig" {
+  content  = azurerm_kubernetes_cluster.aks.kube_config_raw
+  filename = "${path.root}/kubeconfig-${var.cluster_name}.yaml"
+  
+  depends_on = [azurerm_kubernetes_cluster.aks]
 }

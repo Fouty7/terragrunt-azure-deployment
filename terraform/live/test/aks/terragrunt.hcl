@@ -23,13 +23,20 @@ locals {
 
 # Dependencies
 dependencies {
-  paths = ["../monitoring"]
+  paths = ["../monitoring", "../network"]
 }
 
 dependency "monitoring" {
   config_path = "../monitoring"
   mock_outputs = {
     log_analytics_workspace_id = "mock-workspace-id"
+  }
+}
+
+dependency "network" {
+  config_path = "../network"
+  mock_outputs = {
+    aks_subnet_id = "mock-subnet-id"
   }
 }
 
@@ -51,6 +58,7 @@ inputs = {
   network_plugin    = "azure"
   
   log_analytics_workspace_id = dependency.monitoring.outputs.log_analytics_workspace_id
+  subnet_id = dependency.network.outputs.aks_subnet_id
 
   tags = {
     Project     = "CAI-Kubernetes"
