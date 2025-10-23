@@ -29,15 +29,17 @@ dependencies {
 dependency "monitoring" {
   config_path = "../monitoring"
   mock_outputs = {
-    log_analytics_workspace_id = "mock-workspace-id"
+    log_analytics_workspace_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mock-rg/providers/Microsoft.OperationalInsights/workspaces/mock-workspace"
   }
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "init"]
 }
 
 dependency "network" {
   config_path = "../network"
   mock_outputs = {
-    aks_subnet_id = "mock-subnet-id"
+    aks_subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/mock-rg/providers/Microsoft.Network/virtualNetworks/mock-vnet/subnets/mock-subnet"
   }
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "init"]
 }
 
 inputs = {

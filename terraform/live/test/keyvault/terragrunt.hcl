@@ -12,6 +12,7 @@ dependency "sql" {
   mock_outputs = {
     sql_connection_string = "mock-connection-string"
   }
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "init"]
 }
 
 dependency "monitoring" {
@@ -19,6 +20,7 @@ dependency "monitoring" {
   mock_outputs = {
     application_insights_instrumentation_key = "mock-insights-key"
   }
+  mock_outputs_allowed_terraform_commands = ["validate", "plan", "init"]
 }
 
 include "root" {

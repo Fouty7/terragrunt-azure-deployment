@@ -1,41 +1,140 @@
-# 🏗️ Azure Infrastructure with Terraform & Terragrunt
+# 🏗️ Azure Infrastructure with Terraform & Terragrunt - CI/CD Pipeline
 
-A production-ready, multi-environment Azure infrastructure setup using Terraform modules and Terragrunt for DRY configuration management.
+Production-ready, multi-environment Azure infrastructure with automated GitHub Actions CI/CD pipeline.
 
-## 🎯 What This Repo Provides
+## 📋 Table of Contents
 
-- **Multi-environment** infrastructure (test, dev, prod)
-- **Azure Kubernetes Service (AKS)** with monitoring integration
-- **Azure Key Vault** for secrets management
-- **Azure SQL Database** for data persistence
-- **Monitoring stack** (Log Analytics + Application Insights)
-- **Automated deployment scripts** with retry logic
-- **Dependency management** between modules
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Initial Setup](#initial-setup)
+- [GitHub Actions Pipeline Setup](#github-actions-pipeline-setup)
+- [Using the Pipeline](#using-the-pipeline)
+- [Adding New Environments](#adding-new-environments)
+- [Troubleshooting](#troubleshooting)
+
+---
+
+## 🎯 Overview
+
+This project provides a complete Infrastructure as Code (IaC) solution for Azure with:
+
+### Infrastructure Components
+
+| Component | Purpose | Dependencies |
+|-----------|---------|--------------|
+| **Network** | VNet, subnet, NSG for AKS | None |
+| **Monitoring** | Log Analytics + Application Insights | None |
+| **SQL Database** | Azure SQL Server + Database | None |
+| **KeyVault** | Secrets management with RBAC | SQL, Monitoring |
+| **AKS Cluster** | Kubernetes cluster with monitoring | Monitoring, Network |
+
+### CI/CD Pipeline Features
+
+- ✅ **Automatic Planning** - `terraform plan` runs on every PR
+- ✅ **Plan Commenting** - Results posted directly to PR
+- ✅ **Automatic Apply** - Deploys on merge to `main`
+- ✅ **Environment Detection** - Only changed environments are affected
+- ✅ **Manual Triggers** - Deploy any environment on-demand
+- ✅ **Approval Gates** - Production requires manual approval
+- ✅ **Artifact Storage** - Kubeconfig files automatically saved
+
+---
+
+## 🏗️ Architecture
+
+### Project Structure
+
+```
+terraform/
+├── modules/              # Reusable Terraform modules
+│   ├── aks/             # Azure Kubernetes Service
+│   ├── keyvault/        # Azure Key Vault
+│   ├── monitoring/      # Log Analytics + App Insights
+│   ├── network/         # Virtual Network
+│   └── sql/             # Azure SQL Database
+│
+├── live/                # Environment-specific configurations
+│   ├── test/            # Test environment
+│   │   ├── terragrunt.hcl       # Environment config
+│   │   ├── aks/                 # AKS configuration
+│   │   ├── keyvault/            # KeyVault configuration
+│   │   ├── monitoring/          # Monitoring configuration
+│   │   ├── network/             # Network configuration
+│   │   └── sql/                 # SQL configuration
+│   ├── dev/             # Development environment
+│   └── prod/            # Production environment
+│
+└── scripts/             # Deployment automation scripts
+    ├── windows/         # PowerShell scripts
+    └── unix/            # Bash scripts
+
+.github/
+└── workflows/           # GitHub Actions CI/CD workflows
+    ├── terragrunt-plan.yml   # Plan on PR
+    └── terragrunt-apply.yml  # Apply on merge
+```
+
+### Deployment Dependencies
+
+```
+┌─────────────────────────────────────────┐
+│  Independent Modules (parallel)         │
+│  ┌──────────┐ ┌─────────┐ ┌─────────┐ │
+│  │Monitoring│ │ Network │ │   SQL   │ │
+│  └────┬─────┘ └────┬────┘ └────┬────┘ │
+└───────┼────────────┼──────────┼────────┘
+        │            │          │
+        └────────┬───┴──────────┘
+                 │
+                 ▼
+        ┌────────────────┐
+        │   KeyVault     │  (depends on SQL & Monitoring)
+        └────────┬───────┘
+                 │
+    ┌────────────┴────────────┐
+    │                         │
+    ▼                         ▼
+Monitoring                Network
+    │                         │
+    └───────────┬─────────────┘
+                │
+                ▼
+        ┌───────────────┐
+        │      AKS      │  (depends on Monitoring & Network)
+        └───────────────┘
+```
+
+---
 
 ## 📋 Prerequisites
 
 ### Required Tools
-1. **[Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)** (latest version)
-2. **[Terraform](https://www.terraform.io/downloads)** (>= 1.3.0)
-3. **[Terragrunt](https://terragrunt.gruntwork.io/docs/getting-started/install/)** (latest version)
-4. **PowerShell** (for automation scripts)
 
-### Azure Setup
+- **[Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)** (latest version)
+- **[Terraform](https://www.terraform.io/downloads)** >= 1.3.0
+- **[Terragrunt](https://terragrunt.gruntwork.io/docs/getting-started/install/)** (latest version)
+- **Git** (for version control)
+- **GitHub Account** with repository access
+
+### Azure Requirements
+
 - Active Azure subscription
-- Appropriate permissions to create resources and service principals
+- Permissions to create resources and service principals
+- Resource quotas for AKS, SQL, and other services
 
 ---
 
-## 🚀 Quick Start (First Time Setup)
+## 🚀 Initial Setup
 
-### 1. Clone and Setup
+### Step 1: Clone Repository
 
 ```bash
 git clone <your-repo-url>
-cd Azure-Environment-Terraform/terraform
+cd Azure-Environment-Terraform
 ```
 
-### 2. Azure Authentication
+### Step 2: Azure Authentication
 
 ```bash
 # Login to Azure
@@ -48,19 +147,43 @@ az account show
 az account set --subscription "YOUR_SUBSCRIPTION_ID"
 ```
 
-### 3. Create Azure Backend (One-time)
+### Step 3: Create Service Principal for GitHub Actions
 
-**Option A: Automated Setup**
-```powershell
-.\az-tf-backend.ps1
+```bash
+# Create service principal with Contributor role
+az ad sp create-for-rbac \
+  --name "github-actions-terraform-sp" \
+  --role="Contributor" \
+  --scopes="/subscriptions/YOUR_SUBSCRIPTION_ID"
+
+# Output will be like:
+# {
+#   "appId": "xxx",        # → ARM_CLIENT_ID
+#   "password": "xxx",     # → ARM_CLIENT_SECRET
+#   "tenant": "xxx"        # → ARM_TENANT_ID
+# }
 ```
 
-**Option B: Manual Setup**
-```powershell
-# Set variables
+**⚠️ Important: Save this output securely - you'll need it for GitHub Secrets!**
+
+Grant additional permissions for KeyVault role assignments:
+
+```bash
+az role assignment create \
+  --assignee "YOUR_CLIENT_ID_FROM_ABOVE" \
+  --role "User Access Administrator" \
+  --scope "/subscriptions/YOUR_SUBSCRIPTION_ID"
+```
+
+### Step 4: Create Azure Backend Storage
+
+This storage account will hold Terraform state files.
+
+```bash
+# Set variables (customize as needed)
 $ResourceGroupName = "test-rg"
 $StorageAccountName = "tfbackend$(Get-Random)"  # Must be globally unique
-$Location = "westus2"  # Use westus2 to avoid SQL provisioning restrictions
+$Location = "westus2"
 
 # Create resource group
 az group create --name $ResourceGroupName --location $Location
@@ -77,333 +200,554 @@ az storage account create `
   --kind StorageV2 `
   --encryption-services blob
 
+# Create container for Terraform state
+az storage container create `
+  --name "tfstate" `
+  --account-name $StorageAccountName `
+  --auth-mode login
+
+# Grant service principal access to storage
+$StorageAccountId = az storage account show `
+  --name $StorageAccountName `
+  --resource-group $ResourceGroupName `
+  --query id -o tsv
+
+az role assignment create `
+  --assignee "YOUR_SERVICE_PRINCIPAL_CLIENT_ID" `
+  --role "Storage Blob Data Contributor" `
+  --scope $StorageAccountId
+```
+
+**💾 Save your storage account name - you'll need it in the next step!**
+
+### Step 5: Set Up Pre-commit Hooks (Optional but Recommended)
+
+Pre-commit hooks catch errors before they reach GitHub, saving time and preventing issues.
+
+```bash
+# Install pre-commit
+pip install pre-commit
+
+# Install hooks in this repo
+pre-commit install
+
+# Test (optional)
+pre-commit run --all-files
+```
+
+**What this does:**
+- ✅ Auto-formats Terraform code
+- ✅ Validates syntax before commit
+- ✅ Scans for security issues
+- ✅ Catches common mistakes early
+
+**Takes 2 seconds per commit, saves 30+ minutes per failed PR!**
+
+### Step 6: Update Terragrunt Configuration
+
+Edit `terraform/live/test/terragrunt.hcl` and update the storage account name:
+
+```hcl
+locals {
+  env                  = "test"
+  location             = "westus2"
+  resource_group_name  = "test-rg"
+  storage_account_name = "YOUR_STORAGE_ACCOUNT_NAME"  # ← UPDATE THIS
+  container_name       = "tfstate"
+  # ... rest of config
+}
+```
+
+---
+
+## 🤖 GitHub Actions Pipeline Setup
+
+### Step 1: Configure GitHub Secrets
+
+Navigate to your repository on GitHub: **Settings → Secrets and variables → Actions**
+
+Click **New repository secret** and add the following:
+
+| Secret Name | Value | How to Get |
+|-------------|-------|------------|
+| `ARM_SUBSCRIPTION_ID` | Your Azure subscription ID | `az account show --query id -o tsv` |
+| `ARM_CLIENT_ID` | Service Principal App ID | From Step 3 above |
+| `ARM_CLIENT_SECRET` | Service Principal Password | From Step 3 above |
+| `ARM_TENANT_ID` | Azure Tenant ID | `az account show --query tenantId -o tsv` |
+| `SQL_ADMIN_PASSWORD` | SQL Server admin password | Create a strong password (min 8 chars, mixed case, numbers, special chars) |
+
+### Step 2: Configure GitHub Environments (Optional but Recommended)
+
+GitHub Environments provide approval gates for production deployments.
+
+1. Go to **Settings → Environments**
+2. Click **New environment**
+3. Create three environments:
+   - `test` (no protection rules)
+   - `dev` (no protection rules)
+   - `prod` (enable protection rules)
+
+#### Configure Production Protection:
+
+For the `prod` environment:
+1. ✅ Enable **Required reviewers**
+2. Add team members who must approve production deployments
+3. Optionally enable **Wait timer** (e.g., 5 minutes delay)
+
+This ensures production deployments require manual approval.
+
+### Step 3: Verify Workflow Files
+
+The repository includes two workflow files:
+
+**`.github/workflows/terragrunt-plan.yml`**
+- Triggers on pull requests
+- Runs `terragrunt plan` for changed environments
+- Posts results as PR comment
+
+**`.github/workflows/terragrunt-apply.yml`**
+- Triggers on merge to `main` or manual dispatch
+- Runs `terragrunt apply` to deploy infrastructure
+- Uploads kubeconfig artifacts
+
+These files are pre-configured and ready to use.
+
+---
+
+## 🎯 Using the Pipeline
+
+### Workflow 1: Automated PR → Plan → Review → Merge → Apply
+
+This is the recommended workflow for all infrastructure changes.
+
+#### Step 1: Create Feature Branch
+
+```bash
+# Create and checkout a new feature branch
+git checkout -b feature/add-monitoring-alerts
+
+# Make your infrastructure changes
+# Example: Edit terraform/live/test/monitoring/terragrunt.hcl
+```
+
+#### Step 2: Commit and Push
+
+```bash
+# Stage your changes
+git add .
+
+# Commit with descriptive message
+git commit -m "Add monitoring alerts for AKS cluster"
+
+# Push to GitHub
+git push origin feature/add-monitoring-alerts
+```
+
+#### Step 3: Create Pull Request
+
+1. Go to GitHub repository
+2. Click **Pull requests → New pull request**
+3. Select your feature branch
+4. Click **Create pull request**
+
+**What happens automatically:**
+- GitHub Actions detects changed files
+- Determines affected environments (test/dev/prod)
+- Runs `terragrunt plan` for each environment
+- Posts plan output as a comment on the PR
+
+#### Step 4: Review Plan Output
+
+The PR comment will show:
+
+```
+## Terragrunt Plan: `test` ✅ Success
+
+<details>
+<summary>Show Plan Output</summary>
+
+```
+Terraform will perform the following actions:
+
+  # azurerm_monitor_metric_alert.cpu_alert will be created
+  + resource "azurerm_monitor_metric_alert" "cpu_alert" {
+      + name                = "aks-cpu-high"
+      + resource_group_name = "test-rg"
+      ...
+    }
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+```
+
+</details>
+
+**Environment**: `test`
+**Exit Code**: `0`
+```
+
+#### Step 5: Code Review
+
+- Review the plan output
+- Request review from team members
+- Address any feedback
+
+#### Step 6: Merge Pull Request
+
+After approval, merge the PR to `main`.
+
+**What happens automatically:**
+- GitHub Actions detects the merge
+- Identifies changed environments
+- Runs `terragrunt apply --auto-approve`
+- Deploys infrastructure to Azure
+- Uploads kubeconfig artifact (if AKS changed)
+- Creates deployment summary
+
+#### Step 7: Verify Deployment
+
+1. Go to **Actions** tab on GitHub
+2. View the workflow run
+3. Check deployment summary
+4. Verify resources in Azure Portal
+
+---
+
+### Workflow 2: Manual Deployment
+
+Use this for first-time deployments or emergency updates.
+
+#### Step 1: Navigate to Actions
+
+1. Go to **Actions** tab on GitHub
+2. Select **Terragrunt Apply** workflow
+3. Click **Run workflow** button
+
+#### Step 2: Configure Deployment
+
+Select deployment options:
+
+- **Branch**: `main` (or your branch)
+- **Environment**: Choose `test`, `dev`, or `prod`
+- **First deploy**: Check this for first-time deployment
+
+#### Step 3: Run Workflow
+
+Click **Run workflow**
+
+For production deployments:
+- Workflow will pause for approval
+- Designated reviewers will receive notification
+- Approve in **Actions → Review deployments**
+
+---
+
+## 🔄 Deployment Workflows
+
+### Standard Deployment (After Initial Setup)
+
+```bash
+# GitHub Actions runs:
+cd terraform/live/<environment>
+terragrunt run-all apply --terragrunt-parallelism 1 --auto-approve
+```
+
+All modules are deployed respecting their dependencies.
+
+### First Deployment (For New Environments)
+
+When deploying a new environment for the first time, enable "First deploy" mode. This ensures proper dependency ordering:
+
+```bash
+# Step 1: Independent modules
+terragrunt apply --working-dir monitoring
+terragrunt apply --working-dir network
+terragrunt apply --working-dir sql
+
+# Step 2: KeyVault (depends on SQL & monitoring)
+terragrunt apply --working-dir keyvault
+
+# Step 3: AKS (depends on monitoring & network)
+terragrunt apply --working-dir aks
+```
+
+---
+
+## ➕ Adding New Environments
+
+Currently configured: `test` environment
+Want to add: `dev`, `prod`, `staging`, etc.
+
+### Step 1: Create Backend Storage
+
+```bash
+# Set environment name
+$ENV = "dev"  # or prod, staging, etc.
+$ResourceGroupName = "${ENV}-rg"
+$StorageAccountName = "tfbackend${ENV}$(Get-Random)"
+$Location = "eastus"  # choose your region
+
+# Create resource group
+az group create --name $ResourceGroupName --location $Location
+
+# Create storage account
+az storage account create `
+  --name $StorageAccountName `
+  --resource-group $ResourceGroupName `
+  --location $Location `
+  --sku Standard_LRS
+
 # Create container
 az storage container create `
   --name "tfstate" `
   --account-name $StorageAccountName `
   --auth-mode login
+
+# Grant service principal access
+$StorageAccountId = az storage account show `
+  --name $StorageAccountName `
+  --resource-group $ResourceGroupName `
+  --query id -o tsv
+
+az role assignment create `
+  --assignee "YOUR_SERVICE_PRINCIPAL_CLIENT_ID" `
+  --role "Storage Blob Data Contributor" `
+  --scope $StorageAccountId
 ```
 
-### 4. Create Service Principal
+### Step 2: Copy Environment Directory
 
 ```bash
-# Create service principal with Contributor role
-az ad sp create-for-rbac --name "terragrunt-sp" --role="Contributor" --scopes="/subscriptions/YOUR_SUBSCRIPTION_ID"
-
-# Grant User Access Administrator role (needed for KeyVault role assignments)
-az role assignment create --assignee "SERVICE_PRINCIPAL_CLIENT_ID" --role "User Access Administrator" --scope "/subscriptions/YOUR_SUBSCRIPTION_ID"
+# Copy existing environment as template
+cd terraform/live
+cp -r test dev  # or your new environment name
 ```
 
-**Save the output securely! You'll need:**
-- `appId` (Client ID)
-- `password` (Client Secret)  
-- `tenant` (Tenant ID)
-- Your `subscription ID`
+### Step 3: Update Environment Configuration
 
-### 5. Set Azure Credentials
-
-```powershell
-# Windows - Run the credential setup script
-.\scripts\windows\set-azure-creds.ps1
-```
-
-Or set environment variables manually:
-```powershell
-$env:ARM_SUBSCRIPTION_ID = "your-subscription-id"
-$env:ARM_CLIENT_ID = "your-client-id" 
-$env:ARM_CLIENT_SECRET = "your-client-secret"
-$env:ARM_TENANT_ID = "your-tenant-id"
-```
-
-### 6. Update Configuration
-
-Edit `terraform/live/test/terragrunt.hcl` with your storage account name:
+Edit `terraform/live/dev/terragrunt.hcl`:
 
 ```hcl
 locals {
-  storage_account_name = "your-storage-account-name"  # Update this
+  env                  = "dev"  # ← Update environment name
+  location             = "eastus"  # ← Update region if needed
+  resource_group_name  = "dev-rg"  # ← Update resource group
+  storage_account_name = "YOUR_NEW_STORAGE_ACCOUNT"  # ← Update storage account
   container_name       = "tfstate"
-  # Other settings...
+
+  # Node pool settings (adjust for environment)
+  node_count          = 2
+  vm_size             = "Standard_B2s"
+  enable_auto_scaling = false
+  min_count           = 1
+  max_count           = 3
+}
+
+# Keep the remote_state, generate, and inputs blocks
+# Update storage_account_name in remote_state config
+remote_state {
+  backend = "azurerm"
+  config = {
+    resource_group_name  = local.resource_group_name
+    storage_account_name = local.storage_account_name  # Uses local above
+    container_name       = local.container_name
+    key                  = "${path_relative_to_include()}/terraform.tfstate"
+  }
+}
+
+# Provider generation (keep as-is from test)
+generate "provider" {
+  path      = "provider.tf"
+  if_exists = "overwrite_terragrunt"
+  contents  = <<EOF
+terraform {
+  required_version = ">= 1.3.0"
+  backend "azurerm" {}
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.0"
+    }
+  }
+}
+provider "azurerm" {
+  features {
+    key_vault {
+      purge_soft_delete_on_destroy = true  # Set false for production
+    }
+    resource_group {
+      prevent_deletion_if_contains_resources = false  # Set true for production
+    }
+  }
+}
+EOF
+}
+
+# Inputs passed to child modules
+inputs = {
+  env                 = local.env
+  location            = local.location
+  resource_group_name = local.resource_group_name
+  node_count          = local.node_count
+  vm_size             = local.vm_size
+  enable_auto_scaling = local.enable_auto_scaling
+  min_count           = local.min_count
+  max_count           = local.max_count
 }
 ```
 
-### 7. Deploy Infrastructure
+### Step 4: Review Module Configurations
 
-**Cross-Platform (Recommended):**
-```bash
-# First deployment (handles dependencies)
-./scripts/deploy -a apply -e test -f
+Check each module directory (`aks/`, `keyvault/`, `monitoring/`, `network/`, `sql/`) and update any hardcoded values specific to your new environment.
 
-# Subsequent deployments  
-./scripts/deploy -a plan -e test
-./scripts/deploy -a apply -e test
-```
-
-**Windows (PowerShell):**
-```powershell
-.\scripts\windows\deploy.ps1 -Action apply -Environment test -FirstDeploy
-.\scripts\windows\deploy.ps1 -Action plan -Environment test
-```
-
-**mac-linux/Linux/macOS (Bash):**
-```bash
-./scripts/mac-linux/deploy.sh -a apply -e test -f
-./scripts/mac-linux/deploy.sh -a plan -e test
-```
-
----
-
-## 🏗️ Project Structure
-
-```
-terraform/
-├── modules/              # Reusable Terraform modules
-│   ├── aks/             # Azure Kubernetes Service
-│   ├── keyvault/        # Azure Key Vault
-│   ├── monitoring/      # Log Analytics + App Insights  
-│   ├── network/         # Virtual Network (future)
-│   ├── sql/             # Azure SQL Database
-│   └── storage/         # Storage accounts (future)
-├── live/                # Environment-specific configs
-│   ├── test/            # Test environment
-│   │   ├── terragrunt.hcl    # Environment config
-│   │   ├── aks/              # AKS configuration
-│   │   ├── keyvault/         # KeyVault configuration
-│   │   ├── monitoring/       # Monitoring configuration
-│   │   └── sql/              # SQL configuration
-│   ├── dev/             # Development environment  
-│   └── prod/            # Production environment
-└── scripts/             # Cross-platform automation scripts
-    ├── deploy               # Cross-platform deployment wrapper
-    ├── destroy              # Cross-platform destroy wrapper  
-    ├── windows/             # Windows-specific scripts
-    │   ├── deploy.ps1       # PowerShell deployment script
-    │   ├── destroy.ps1      # PowerShell destroy script
-    │   └── set-azure-creds.ps1  # Credential setup
-    └── mac-linux/                # mac-linux/Linux/macOS scripts
-        ├── deploy.sh        # Bash deployment script
-        └── destroy.sh       # Bash destroy script
-```
-
-## 📦 Infrastructure Components
-
-| Component | Purpose | Dependencies |
-|-----------|---------|--------------|
-| **Monitoring** | Log Analytics Workspace + Application Insights for observability | None |
-| **KeyVault** | Centralized secrets management with RBAC | None |  
-| **SQL Database** | Azure SQL Server + Database for data persistence | None |
-| **AKS Cluster** | Kubernetes cluster with monitoring integration | Monitoring |
-
-## 🔧 Available Scripts
-
-### Deployment Scripts
-
-**Cross-Platform Scripts (Recommended)**
-```bash
-# First time deployment (handles dependencies)
-./scripts/deploy -a apply -e test -f
-
-# Plan changes
-./scripts/deploy -a plan -e test
-
-# Apply changes  
-./scripts/deploy -a apply -e test
-```
-
-**Destruction Scripts**
-
-*Cross-Platform:*
-```bash
-# Safe destruction (with confirmation)
-./scripts/destroy -e test
-
-# Automated destruction (for CI/CD)
-./scripts/destroy -e test --auto-approve
-```
-
-*Platform-Specific:*
-```powershell
-# Windows
-.\scripts\windows\destroy.ps1 -Environment test
-```
-```bash
-# mac-linux/Linux/macOS  
-./scripts/mac-linux/destroy.sh -e test
-```
-
-### Manual Commands (Advanced)
-
-```powershell
-# Navigate to environment
-cd live\test
-
-# Individual module operations
-terragrunt plan --terragrunt-working-dir monitoring
-terragrunt apply --terragrunt-working-dir monitoring
-
-# All modules (use with caution)
-terragrunt run-all plan --terragrunt-parallelism 1
-terragrunt run-all apply --terragrunt-parallelism 1
-```
-
----
-
-## 🔐 Security & Best Practices
-
-### Secrets Management
-- All sensitive data stored in Azure Key Vault
-- Service principal credentials via environment variables
-- No secrets in source code
-
-### Access Control
-- Service principal with minimal required permissions
-- RBAC enabled on Key Vault
-- Resource-level access controls
-
-### State Management  
-- Remote state in Azure Storage with encryption
-- Unique state files per module for isolation
-- State locking to prevent concurrent modifications
-
----
-
-## 🛠️ Troubleshooting Guide
-
-### Common Issues
-
-#### **"ProvisioningDisabled" for SQL Server**
-**Cause:** Regional restrictions on SQL provisioning
-**Solution:** Use `westus2` region instead of `eastus`
+**Example:** `terraform/live/dev/sql/terragrunt.hcl`
 
 ```hcl
-# In terragrunt.hcl
-locals {
-  location = "westus2"  # Change from eastus
+inputs = {
+  cluster_name        = "myapp-${local.env}-v2"  # Uses 'dev' from parent
+  resource_group_name = local.resource_group_name
+  location            = local.location
+  admin_username      = "devadmin"
+  admin_password      = get_env("SQL_ADMIN_PASSWORD", "DefaultDevPass123!")
+  # ... other settings
 }
 ```
 
-#### **"State lock" Errors**
-**Cause:** Previous operations didn't release locks properly
-**Solution:** Force unlock with the lock ID from error message
+### Step 5: First Deployment
 
-```powershell
-terragrunt force-unlock LOCK_ID_FROM_ERROR
-```
+Use GitHub Actions manual workflow:
 
-#### **"HTTP response was nil" Errors**
-**Cause:** Azure API connectivity issues
-**Solution:** Use deployment scripts with retry logic, or wait and retry
+1. Go to **Actions → Terragrunt Apply**
+2. Click **Run workflow**
+3. Select:
+   - Environment: `dev` (your new environment)
+   - First deploy: ✅ **Checked**
+4. Click **Run workflow**
 
-#### **"InvalidResourceLocation" Errors**
-**Cause:** Resource name conflicts across regions
-**Solution:** Change resource names or clean up conflicting resources
+### Step 6: Verify Deployment
 
 ```bash
-# Check for existing resources
-az resource list --resource-group test-rg
+# Check resources in Azure Portal
+az resource list --resource-group dev-rg -o table
 
-# Clean up if needed
-az resource delete --ids "/subscriptions/.../resourceGroups/test-rg/providers/..."
-```
-
-#### **Permission Denied for Role Assignments**
-**Cause:** Service principal lacks "User Access Administrator" role
-**Solution:** Grant additional permissions
-
-```bash
-az role assignment create --assignee "SERVICE_PRINCIPAL_CLIENT_ID" --role "User Access Administrator" --scope "/subscriptions/SUBSCRIPTION_ID"
-```
-
-### Dependency Issues
-
-#### **AKS Gets "mock-workspace-id" Error**
-**Cause:** Monitoring module not applied first
-**Solution:** Use `deploy.ps1 -FirstDeploy` or apply monitoring manually first
-
-#### **Module Dependencies**
-```
-Monitoring (independent) → AKS (dependent)
-KeyVault (independent)
-SQL (independent)
-```
-
-### Performance Optimization
-
-#### **Slow Deployments**
-- Use `--terragrunt-parallelism 1` to avoid API throttling
-- Deploy independent modules in parallel when possible
-- Use `westus2` region for better SQL provisioning reliability
-
-#### **Large State Files**
-- Each module has separate state files for faster operations
-- Clean `.terragrunt-cache` directories if needed:
-```powershell
-Get-ChildItem -Directory | ForEach-Object { Remove-Item -Path "$($_.Name)/.terragrunt-cache" -Recurse -Force -ErrorAction SilentlyContinue }
+# Verify state in storage
+az storage blob list \
+  --account-name YOUR_STORAGE_ACCOUNT \
+  --container-name tfstate \
+  --auth-mode login -o table
 ```
 
 ---
 
-## 🔄 Development Workflow
+## 📊 Environment Detection
 
-### Adding New Environments
+The GitHub Actions workflows automatically detect which environments need to be planned/applied based on file changes:
 
-1. **Copy environment structure:**
-```bash
-cp -r live/test live/dev
-```
-
-2. **Update environment-specific values:**
-```hcl
-# live/dev/terragrunt.hcl
-locals {
-  env = "dev"
-  # Update other environment-specific settings
-}
-```
-
-3. **Deploy:**
-```powershell
-.\scripts\deploy.ps1 -Action apply -Environment dev -FirstDeploy
-```
-
-### Adding New Modules
-
-1. **Create module in `modules/` directory**
-2. **Add to environment in `live/ENV/` directory**  
-3. **Update dependencies in `deploy.ps1` if needed**
-4. **Test with plan first:**
-```powershell
-terragrunt plan --terragrunt-working-dir live/test/new-module
-```
+| File Changed | Environments Affected |
+|--------------|----------------------|
+| `terraform/live/test/*` | `test` only |
+| `terraform/live/dev/*` | `dev` only |
+| `terraform/live/prod/*` | `prod` only (requires approval) |
+| `terraform/modules/*` | **Plan:** All environments<br>**Apply:** `test` only (manual promotion to others) |
+| Multiple environments | All changed environments |
 
 ---
 
-## 🆘 Getting Help
+## 🆘 Troubleshooting
 
-### Error Analysis
-1. **Check Azure Portal** for resource status
-2. **Review Terraform logs** for detailed error messages  
-3. **Use Azure CLI** to investigate resource states
-4. **Check quotas** in Azure Portal → Subscriptions → Usage + quotas
+### Issue: Plan workflow fails with "Failed to get existing workspaces"
 
-### Support Channels
-- **Internal:** Contact DevOps team
-- **Issues:** Create GitHub issue with error logs
-- **Azure Support:** For quota/billing issues
+**Cause:** Service principal lacks access to storage account
 
-### Useful Commands
+**Solution:**
+
 ```bash
-# Check resource group contents
-az resource list --resource-group test-rg -o table
+# Grant storage access
+$StorageAccountId = az storage account show `
+  --name YOUR_STORAGE_ACCOUNT `
+  --resource-group YOUR_RG `
+  --query id -o tsv
 
-# Check quotas
-az vm list-usage --location westus2 -o table
-
-# Validate template
-az deployment group validate --resource-group test-rg --template-file template.json
-
-# Check service health
-az resource health list --resource-group test-rg
+az role assignment create `
+  --assignee "YOUR_CLIENT_ID" `
+  --role "Storage Blob Data Contributor" `
+  --scope $StorageAccountId
 ```
 
-**Happy Infrastructure as Code! 🚀**
+### Issue: Apply fails with "Resource already exists"
+
+**Cause:** Manual changes conflict with Terraform state
+
+**Solution:**
+
+```bash
+# Option 1: Import existing resource
+cd terraform/live/test
+terragrunt import azurerm_resource_group.rg /subscriptions/.../resourceGroups/test-rg
+
+# Option 2: Remove manually created resource
+az resource delete --ids /subscriptions/.../resourceGroups/test-rg
+```
+
+### Issue: Workflow doesn't trigger on PR
+
+**Cause:** PR not targeting `main` or `develop` branch
+
+**Solution:** Ensure your PR targets `main` or `develop` (check workflow triggers in `.github/workflows/terragrunt-plan.yml`)
+
+### Issue: State lock errors
+
+**Cause:** Previous operation didn't release lock
+
+**Solution:**
+
+```bash
+# Get lock ID from error message, then unlock
+cd terraform/live/test
+terragrunt force-unlock LOCK_ID_FROM_ERROR_MESSAGE
+```
+
+### Issue: Production deployment stuck on "Waiting"
+
+**Cause:** Approval required for production environment
+
+**Solution:**
+1. Go to **Actions → Select workflow run**
+2. Click **Review deployments**
+3. Select `prod` environment
+4. Click **Approve and deploy**
+
+---
+
+## 📚 Additional Resources
+
+### Project Documentation
+
+- **README-DEV-TEAM.md** - Local development workflow (scripts, manual operations)
+- **`.github/workflows/`** - GitHub Actions workflow definitions
+
+### External Resources
+
+- [Terraform Documentation](https://www.terraform.io/docs)
+- [Terragrunt Documentation](https://terragrunt.gruntwork.io/)
+- [Azure Terraform Provider](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+
+---
+
+## 🎉 Quick Start Summary
+
+1. ✅ Clone repository
+2. ✅ Create Azure service principal (save output!)
+3. ✅ Create backend storage account (save name!)
+4. ✅ (Optional) Install pre-commit hooks
+5. ✅ Update storage account name in `terraform/live/test/terragrunt.hcl`
+6. ✅ Add GitHub secrets (5 secrets: ARM_* + SQL_ADMIN_PASSWORD)
+7. ✅ Create feature branch and make changes
+8. ✅ Push and create PR
+9. ✅ Review plan output in PR comment
+10. ✅ Merge PR
+11. ✅ Verify automated deployment
+
+**Your infrastructure is now fully automated! 🚀**
+
+For local development and manual script usage, see **README-DEV-TEAM.md**.

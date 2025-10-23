@@ -1,0 +1,162 @@
+name: Terragrunt Plan
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terragrunt-plan.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+env:
+  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+  SQL_ADMIN_PASSWORD: ${{ secrets.SQL_ADMIN_PASSWORD }}
+  TF_VERSION: '1.3.0'
+  TG_VERSION: '0.55.0'
+
+jobs:
+  detect-changes:
+    name: Detect Changed Environments
+    runs-on: ubuntu-latest
+    outputs:
+      environments: ${{ steps.detect.outputs.environments }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed environments
+        id: detect
+        run: |
+          # Get changed files
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          
+          # Detect which environments changed
+          ENVS=""
+          if echo "$CHANGED_FILES" | grep -q "terraform/live/test/"; then
+            ENVS="${ENVS}test,"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "terraform/live/dev/"; then
+            ENVS="${ENVS}dev,"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "terraform/live/prod/"; then
+            ENVS="${ENVS}prod,"
+          fi
+          
+          # If modules changed, check all environments
+          if echo "$CHANGED_FILES" | grep -q "terraform/modules/"; then
+            ENVS="test,dev,prod,"
+          fi
+          
+          # Remove trailing comma and convert to JSON array
+          ENVS=$(echo "$ENVS" | sed 's/,$//')
+          if [ -z "$ENVS" ]; then
+            echo "environments=[]" >> $GITHUB_OUTPUT
+          else
+            ENVS_JSON=$(echo "[$ENVS]" | sed 's/,/","/g' | sed 's/\[/["/' | sed 's/\]/"]/')
+            echo "environments=$ENVS_JSON" >> $GITHUB_OUTPUT
+          fi
+
+  plan:
+    name: Plan for ${{ matrix.environment }}
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.environments != '[]'
+    strategy:
+      matrix:
+        environment: ${{ fromJson(needs.detect-changes.outputs.environments) }}
+      fail-fast: false
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Install Terragrunt
+        run: |
+          wget -q https://github.com/gruntwork-io/terragrunt/releases/download/v${{ env.TG_VERSION }}/terragrunt_linux_amd64
+          chmod +x terragrunt_linux_amd64
+          sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt
+          terragrunt --version
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.ARM_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.ARM_TENANT_ID }}"
+            }
+
+      - name: Terragrunt Init
+        working-directory: terraform/live/${{ matrix.environment }}
+        run: terragrunt run-all init --terragrunt-non-interactive
+
+      - name: Terragrunt Plan
+        id: plan
+        working-directory: terraform/live/${{ matrix.environment }}
+        env:
+          SQL_ADMIN_PASSWORD: ${{ secrets.SQL_ADMIN_PASSWORD }}
+        run: |
+          set +e
+          terragrunt run-all plan --terragrunt-non-interactive --terragrunt-parallelism 1 -no-color > plan_output.txt 2>&1
+          PLAN_EXIT_CODE=$?
+          set -e
+          
+          # Save plan output
+          cat plan_output.txt
+          
+          echo "exit_code=$PLAN_EXIT_CODE" >> $GITHUB_OUTPUT
+          
+          exit $PLAN_EXIT_CODE
+
+      - name: Comment PR with Plan
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const planOutput = fs.readFileSync('terraform/live/${{ matrix.environment }}/plan_output.txt', 'utf8');
+            const truncatedPlan = planOutput.length > 65000 ? planOutput.substring(0, 65000) + '\n... (truncated)' : planOutput;
+            
+            const exitCode = '${{ steps.plan.outputs.exit_code }}';
+            const status = exitCode === '0' ? '✅ Success' : '❌ Failed';
+            
+            const body = `## Terragrunt Plan: \`${{ matrix.environment }}\` ${status}
+            
+            <details>
+            <summary>Show Plan Output</summary>
+            
+            \`\`\`
+            ${truncatedPlan}
+            \`\`\`
+            
+            </details>
+            
+            **Environment**: \`${{ matrix.environment }}\`
+            **Exit Code**: \`${exitCode}\`
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
