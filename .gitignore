@@ -25,7 +25,8 @@ crash.*.log
 # Terraform workspace files
 .terraform/
 terraform/kubeconfig-test.yaml
-
+PROJECT-REVIEW.md
+DOCUMENTATION.md
 # Terraform provider lock files (optional - team decision)
 # Uncomment to ignore lock files (not recommended for team projects)
 # .terraform.lock.hcl

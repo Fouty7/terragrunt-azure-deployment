@@ -21,7 +21,10 @@ inputs = {
   location            = local.location
 
   admin_username = "testadmin"
-  admin_password = "YourStrong!Passw0rd" # < ---- for real use, inject via environment variable or secrets backend
+  # Password from environment variable - set SQL_ADMIN_PASSWORD before running
+  # For GitHub Actions: Add SQL_ADMIN_PASSWORD to repository secrets
+  # For local dev: Set $env:SQL_ADMIN_PASSWORD or export SQL_ADMIN_PASSWORD
+  admin_password = get_env("SQL_ADMIN_PASSWORD", "DefaultTestPassword123!")  # Default for local testing only
 
   tags = {
     Project     = "CAI-Database"
