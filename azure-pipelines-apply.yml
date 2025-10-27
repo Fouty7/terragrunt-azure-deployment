@@ -1,0 +1,160 @@
+# Azure DevOps Pipeline for Terragrunt Apply
+# Triggers on merge to main OR manual run with environment selection
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - terraform/**
+      - azure-pipelines-apply.yml
+
+# Manual trigger parameters
+parameters:
+  - name: environment
+    displayName: 'Environment to deploy'
+    type: string
+    default: 'none'
+    values:
+      - none      # For CI trigger (auto-detect)
+      - test
+      - dev
+      - prod
+  
+  - name: firstDeploy
+    displayName: 'First deployment (handles dependencies)'
+    type: boolean
+    default: false
+
+variables:
+  TF_VERSION: '1.3.0'
+  TG_VERSION: '0.55.0'
+
+stages:
+  - stage: DetectChanges
+    displayName: 'Detect Changed Environments'
+    # Only run detection on CI trigger (not manual)
+    condition: eq(variables['Build.Reason'], 'IndividualCI')
+    jobs:
+      - job: Detect
+        displayName: 'Detect Changed Files'
+        pool:
+          name: 'Azure Pipelines'
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+            fetchDepth: 2
+          
+          - bash: |
+              # Get changed files in the last commit
+              CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+              
+              echo "Changed files:"
+              echo "$CHANGED_FILES"
+              
+              # Detect which environments changed
+              ENVS=""
+              if echo "$CHANGED_FILES" | grep -q "terraform/live/test/"; then
+                ENVS="${ENVS}test,"
+              fi
+              if echo "$CHANGED_FILES" | grep -q "terraform/live/dev/"; then
+                ENVS="${ENVS}dev,"
+              fi
+              if echo "$CHANGED_FILES" | grep -q "terraform/live/prod/"; then
+                ENVS="${ENVS}prod,"
+              fi
+              
+              # If modules changed, deploy to test first
+              if echo "$CHANGED_FILES" | grep -q "terraform/modules/"; then
+                ENVS="test,"
+              fi
+              
+              # Remove trailing comma
+              ENVS=$(echo "$ENVS" | sed 's/,$//')
+              
+              echo "Detected environments: $ENVS"
+              echo "##vso[task.setvariable variable=environments;isOutput=true]$ENVS"
+            name: detectEnvs
+            displayName: 'Detect Changed Environments'
+
+  - stage: ApplyTest
+    displayName: 'Apply to Test'
+    dependsOn: DetectChanges
+    condition: |
+      or(
+        and(eq(variables['Build.Reason'], 'IndividualCI'), contains(stageDependencies.DetectChanges.Detect.outputs['detectEnvs.environments'], 'test')),
+        eq('${{ parameters.environment }}', 'test')
+      )
+    jobs:
+      - deployment: ApplyTest
+        displayName: 'Apply: test'
+        pool:
+          name: 'Azure Pipelines'
+          vmImage: 'ubuntu-latest'
+        environment: 'test'
+        variables:
+          ENVIRONMENT: 'test'
+          FIRST_DEPLOY: ${{ parameters.firstDeploy }}
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - template: azure-pipelines/templates/terragrunt-apply-steps.yml
+                  parameters:
+                    environment: $(ENVIRONMENT)
+                    firstDeploy: $(FIRST_DEPLOY)
+
+  - stage: ApplyDev
+    displayName: 'Apply to Dev'
+    dependsOn: DetectChanges
+    condition: |
+      or(
+        and(eq(variables['Build.Reason'], 'IndividualCI'), contains(stageDependencies.DetectChanges.Detect.outputs['detectEnvs.environments'], 'dev')),
+        eq('${{ parameters.environment }}', 'dev')
+      )
+    jobs:
+      - deployment: ApplyDev
+        displayName: 'Apply: dev'
+        pool:
+          name: 'Azure Pipelines'
+          vmImage: 'ubuntu-latest'
+        environment: 'dev'
+        variables:
+          ENVIRONMENT: 'dev'
+          FIRST_DEPLOY: ${{ parameters.firstDeploy }}
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - template: azure-pipelines/templates/terragrunt-apply-steps.yml
+                  parameters:
+                    environment: $(ENVIRONMENT)
+                    firstDeploy: $(FIRST_DEPLOY)
+
+  - stage: ApplyProd
+    displayName: 'Apply to Prod'
+    dependsOn: DetectChanges
+    condition: |
+      or(
+        and(eq(variables['Build.Reason'], 'IndividualCI'), contains(stageDependencies.DetectChanges.Detect.outputs['detectEnvs.environments'], 'prod')),
+        eq('${{ parameters.environment }}', 'prod')
+      )
+    jobs:
+      - deployment: ApplyProd
+        displayName: 'Apply: prod'
+        pool:
+          name: 'Azure Pipelines'
+          vmImage: 'ubuntu-latest'
+        environment: 'prod'
+        variables:
+          ENVIRONMENT: 'prod'
+          FIRST_DEPLOY: ${{ parameters.firstDeploy }}
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - template: azure-pipelines/templates/terragrunt-apply-steps.yml
+                  parameters:
+                    environment: $(ENVIRONMENT)
+                    firstDeploy: $(FIRST_DEPLOY)

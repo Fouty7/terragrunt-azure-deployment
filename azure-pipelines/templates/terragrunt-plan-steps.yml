@@ -1,0 +1,86 @@
+# Reusable template for Terragrunt Plan steps
+parameters:
+  - name: environment
+    type: string
+
+steps:
+  - checkout: self
+  
+  - bash: |
+      # Install Terraform
+      wget -q https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip
+      unzip -q terraform_$(TF_VERSION)_linux_amd64.zip
+      sudo mv terraform /usr/local/bin/
+      terraform --version
+      
+      # Install Terragrunt
+      wget -q https://github.com/gruntwork-io/terragrunt/releases/download/v$(TG_VERSION)/terragrunt_linux_amd64
+      chmod +x terragrunt_linux_amd64
+      sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt
+      terragrunt --version
+    displayName: 'Install Terraform & Terragrunt'
+  
+  - task: AzureCLI@2
+    displayName: 'Terragrunt Init & Plan'
+    inputs:
+      azureSubscription: 'Azure-Terraform-ServiceConnection'  # Replace with your service connection name
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      workingDirectory: 'terraform/live/${{ parameters.environment }}'
+      addSpnToEnvironment: true
+      inlineScript: |
+        # Export Azure credentials for Terraform
+        export ARM_CLIENT_ID=$servicePrincipalId
+        export ARM_CLIENT_SECRET=$servicePrincipalKey
+        export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+        export ARM_TENANT_ID=$tenantId
+        
+        # Get SQL password from variable group
+        export SQL_ADMIN_PASSWORD=$(SQL_ADMIN_PASSWORD)
+        
+        echo "🔧 Running Terragrunt Init..."
+        terragrunt run-all init --terragrunt-non-interactive
+        
+        echo "📋 Running Terragrunt Plan..."
+        set +e
+        terragrunt run-all plan --terragrunt-non-interactive --terragrunt-parallelism 1 -no-color > plan_output.txt 2>&1
+        PLAN_EXIT_CODE=$?
+        set -e
+        
+        cat plan_output.txt
+        
+        echo "##vso[task.setvariable variable=planExitCode;isOutput=true]$PLAN_EXIT_CODE"
+        
+        exit $PLAN_EXIT_CODE
+    name: terragruntPlan
+  
+  - bash: |
+      PLAN_OUTPUT=$(cat terraform/live/${{ parameters.environment }}/plan_output.txt)
+      TRUNCATED_PLAN="${PLAN_OUTPUT:0:60000}"
+      EXIT_CODE=$(terragruntPlan.planExitCode)
+      
+      if [ "$EXIT_CODE" -eq "0" ]; then
+        STATUS="✅ Success"
+      else
+        STATUS="❌ Failed"
+      fi
+      
+      # Create PR comment using Azure DevOps REST API
+      # Using jq to properly escape the JSON content
+      COMMENT_JSON=$(jq -n \
+        --arg env "${{ parameters.environment }}" \
+        --arg status "$STATUS" \
+        --arg plan "$TRUNCATED_PLAN" \
+        --arg exitCode "$EXIT_CODE" \
+        '{content: ("## Terragrunt Plan: \\`" + $env + "\\` " + $status + "\n\n<details>\n<summary>Show Plan Output</summary>\n\n\\`\\`\\`\n" + $plan + "\n\\`\\`\\`\n\n</details>\n\n**Environment**: \\`" + $env + "\\`\n**Exit Code**: \\`" + $exitCode + "\\`"), commentType: 1}')
+      
+      # Post comment to PR
+      curl -X POST \\
+        -H "Content-Type: application/json" \\
+        -H "Authorization: Bearer $(System.AccessToken)" \\
+        -d "$COMMENT_JSON" \\
+        "$(System.TeamFoundationCollectionUri)$(System.TeamProject)/_apis/git/repositories/$(Build.Repository.ID)/pullRequests/$(System.PullRequest.PullRequestId)/threads?api-version=7.0"
+    displayName: 'Post Plan to PR Comments'
+    condition: always()
+    env:
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
