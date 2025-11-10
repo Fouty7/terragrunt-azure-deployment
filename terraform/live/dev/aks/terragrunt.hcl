@@ -58,7 +58,6 @@ inputs = {
   enable_monitoring = true
   enable_rbac       = true
   network_plugin    = "azure"
-  network_policy    = "azure"
   
   log_analytics_workspace_id = dependency.monitoring.outputs.log_analytics_workspace_id
   subnet_id = dependency.network.outputs.aks_subnet_id

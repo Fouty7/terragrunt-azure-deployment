@@ -1,0 +1,116 @@
+# Reusable template for Terragrunt Apply steps
+parameters:
+  - name: environment
+    type: string
+  - name: firstDeploy
+    type: string
+    default: 'false'
+
+steps:
+  - checkout: self
+  
+  - bash: |
+      # Install Terraform
+      wget -q https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip
+      unzip -q terraform_$(TF_VERSION)_linux_amd64.zip
+      sudo mv terraform /usr/local/bin/
+      terraform --version
+      
+      # Install Terragrunt
+      wget -q https://github.com/gruntwork-io/terragrunt/releases/download/v$(TG_VERSION)/terragrunt_linux_amd64
+      chmod +x terragrunt_linux_amd64
+      sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt
+      terragrunt --version
+    displayName: 'Install Terraform & Terragrunt'
+  
+  - task: AzureCLI@2
+    displayName: 'Terragrunt Init'
+    inputs:
+      azureSubscription: 'Azure-Terraform-ServiceConnection'  # Replace with your service connection name
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      workingDirectory: 'terraform/live/${{ parameters.environment }}'
+      addSpnToEnvironment: true
+      inlineScript: |
+        # Export Azure credentials for Terraform
+        export ARM_CLIENT_ID=$servicePrincipalId
+        export ARM_CLIENT_SECRET=$servicePrincipalKey
+        export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+        export ARM_TENANT_ID=$tenantId
+        
+        echo "🔧 Running Terragrunt Init..."
+        terragrunt run-all init --terragrunt-non-interactive
+  
+  - task: AzureCLI@2
+    displayName: 'Terragrunt Apply (First Deploy)'
+    condition: eq('${{ parameters.firstDeploy }}', 'true')
+    inputs:
+      azureSubscription: 'Azure-Terraform-ServiceConnection'
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      workingDirectory: 'terraform/live/${{ parameters.environment }}'
+      addSpnToEnvironment: true
+      inlineScript: |
+        # Export Azure credentials for Terraform
+        export ARM_CLIENT_ID=$servicePrincipalId
+        export ARM_CLIENT_SECRET=$servicePrincipalKey
+        export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+        export ARM_TENANT_ID=$tenantId
+        export SQL_ADMIN_PASSWORD=$(SQL_ADMIN_PASSWORD)
+        
+        echo "🚀 First deployment - applying modules in dependency order..."
+        
+        # Step 1: Independent modules
+        for module in monitoring network sql; do
+          echo "📦 Applying $module..."
+          terragrunt apply --auto-approve --terragrunt-non-interactive --terragrunt-working-dir $module
+        done
+        
+        # Step 2: KeyVault (depends on SQL and monitoring)
+        echo "📦 Applying keyvault..."
+        terragrunt apply --auto-approve --terragrunt-non-interactive --terragrunt-working-dir keyvault
+        
+        # Step 3: AKS (depends on monitoring and network)
+        echo "📦 Applying aks..."
+        terragrunt apply --auto-approve --terragrunt-non-interactive --terragrunt-working-dir aks
+        
+        echo "✅ First deployment completed!"
+  
+  - task: AzureCLI@2
+    displayName: 'Terragrunt Apply (Standard)'
+    condition: ne('${{ parameters.firstDeploy }}', 'true')
+    inputs:
+      azureSubscription: 'Azure-Terraform-ServiceConnection'
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      workingDirectory: 'terraform/live/${{ parameters.environment }}'
+      addSpnToEnvironment: true
+      inlineScript: |
+        # Export Azure credentials for Terraform
+        export ARM_CLIENT_ID=$servicePrincipalId
+        export ARM_CLIENT_SECRET=$servicePrincipalKey
+        export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+        export ARM_TENANT_ID=$tenantId
+        export SQL_ADMIN_PASSWORD=$(SQL_ADMIN_PASSWORD)
+        
+        echo "🚀 Running standard apply..."
+        terragrunt run-all apply --terragrunt-non-interactive --terragrunt-parallelism 1 --auto-approve
+  
+  - bash: |
+      # Find and copy kubeconfig
+      KUBECONFIG_FILE=$(find aks/.terragrunt-cache -name "kubeconfig-*.yaml" -type f 2>/dev/null | head -n 1)
+      if [ -n "$KUBECONFIG_FILE" ]; then
+        cp "$KUBECONFIG_FILE" "$(Build.ArtifactStagingDirectory)/kubeconfig-${{ parameters.environment }}.yaml"
+        echo "✅ Kubeconfig saved"
+      fi
+    displayName: 'Export Kubeconfig'
+    workingDirectory: 'terraform/live/${{ parameters.environment }}'
+    condition: succeeded()
+  
+  - task: PublishBuildArtifacts@1
+    displayName: 'Upload Kubeconfig Artifact'
+    condition: succeeded()
+    inputs:
+      pathToPublish: '$(Build.ArtifactStagingDirectory)/kubeconfig-${{ parameters.environment }}.yaml'
+      artifactName: 'kubeconfig-${{ parameters.environment }}'
+      publishLocation: 'Container'
