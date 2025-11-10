@@ -2,7 +2,7 @@ resource "azurerm_virtual_network" "this" {
   name                = "${var.cluster_name}-vnet"
   location            = var.location
   resource_group_name = var.resource_group_name
-  address_space       = ["10.0.0.0/16"]
+  address_space       = var.vnet_address_space
   
   tags = var.tags
 }
@@ -11,7 +11,7 @@ resource "azurerm_subnet" "aks" {
   name                 = "aks-subnet"
   resource_group_name  = var.resource_group_name
   virtual_network_name = azurerm_virtual_network.this.name
-  address_prefixes     = ["10.0.1.0/24"]
+  address_prefixes     = var.aks_subnet_address_prefixes
 }
 
 resource "azurerm_network_security_group" "aks" {
@@ -19,16 +19,16 @@ resource "azurerm_network_security_group" "aks" {
   location            = var.location
   resource_group_name = var.resource_group_name
 
-  # Allow AKS traffic
+  # Allow internal VNet traffic (required for AKS node-to-node and pod communication)
   security_rule {
-    name                       = "AllowAKSTraffic"
+    name                       = "AllowVNetInbound"
     priority                   = 1001
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "*"
     source_port_range          = "*"
     destination_port_range     = "*"
-    source_address_prefix      = "10.0.0.0/16"
+    source_address_prefix      = var.vnet_address_space[0]
     destination_address_prefix = "*"
   }
 
