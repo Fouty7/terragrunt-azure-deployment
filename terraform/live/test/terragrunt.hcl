@@ -6,6 +6,10 @@ locals {
   storage_account_name = "tfbackend2967"
   container_name       = "tfstate"
 
+  # Network configuration
+  vnet_address_space           = ["10.0.0.0/16"]
+  aks_subnet_address_prefixes  = ["10.0.1.0/24"]
+
   # Node pool defaults used by child modules
   node_count          = 1
   vm_size             = "Standard_B2s"
@@ -61,6 +65,10 @@ inputs = {
   env                 = local.env
   location            = local.location
   resource_group_name = local.resource_group_name
+
+  # Network configuration (available to all child modules)
+  vnet_address_space          = local.vnet_address_space
+  aks_subnet_address_prefixes = local.aks_subnet_address_prefixes
 
   # defaults for node pool - child modules can override if needed
   node_count          = local.node_count

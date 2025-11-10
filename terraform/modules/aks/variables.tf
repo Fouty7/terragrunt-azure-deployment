@@ -64,6 +64,17 @@ variable "network_plugin" {
   default     = "azure"
 }
 
+variable "network_policy" {
+  type        = string
+  description = "Network policy to use (azure, calico, or none). Required for NetworkPolicy enforcement."
+  default     = "azure"
+  
+  validation {
+    condition     = contains(["azure", "calico", "none"], var.network_policy)
+    error_message = "network_policy must be 'azure', 'calico', or 'none'."
+  }
+}
+
 variable "log_analytics_workspace_id" {
   type        = string
   description = "Log Analytics Workspace ID for monitoring"
