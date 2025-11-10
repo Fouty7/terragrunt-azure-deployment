@@ -1,13 +1,13 @@
 name: Terragrunt Plan
 
-on:
-  pull_request:
-    branches:
-      - main
-      - develop
-    paths:
-      - 'terraform/**'
-      - '.github/workflows/terragrunt-plan.yml'
+# on:
+#   pull_request:
+#     branches:
+#       - main
+#       - develop
+#     paths:
+#       - 'terraform/**'
+#       - '.github/workflows/terragrunt-plan.yml'
 
 permissions:
   contents: read

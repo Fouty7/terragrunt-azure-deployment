@@ -1,27 +1,27 @@
 name: Terragrunt Apply
 
-on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'terraform/**'
-      - '.github/workflows/terragrunt-apply.yml'
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy'
-        required: true
-        type: choice
-        options:
-          - test
-          - dev
-          - prod
-      first_deploy:
-        description: 'First deployment (handles dependencies)'
-        required: false
-        type: boolean
-        default: false
+# on:
+#   push:
+#     branches:
+#       - main
+#     paths:
+#       - 'terraform/**'
+#       - '.github/workflows/terragrunt-apply.yml'
+#   workflow_dispatch:
+#     inputs:
+#       environment:
+#         description: 'Environment to deploy'
+#         required: true
+#         type: choice
+#         options:
+#           - test
+#           - dev
+#           - prod
+#       first_deploy:
+#         description: 'First deployment (handles dependencies)'
+#         required: false
+#         type: boolean
+#         default: false
 
 permissions:
   contents: read
